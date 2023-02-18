@@ -34,6 +34,8 @@ on:
   push:
     tags:
       - v[0-9]+.*
+    branches:
+      - ci/macos-m1
 
 env:
   ALL_CARGO_DIST_TARGET_ARGS: --target=x86_64-unknown-linux-gnu --target=x86_64-apple-darwin --target=x86_64-pc-windows-msvc 
@@ -41,23 +43,23 @@ env:
 
 jobs:
   # Create the Github Release™️ so the packages have something to be uploaded to
-  create-release:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.create-gh-release.outputs.computed-prefix }}${{ steps.create-gh-release.outputs.version }}
-    steps:
-      - uses: actions/checkout@v3
-      - id: create-gh-release
-        uses: taiki-e/create-gh-release-action@v1
-        with:
-          draft: true
-          # (required) GitHub token for creating GitHub Releases.
-          token: ${{ secrets.GITHUB_TOKEN }}
+  # create-release:
+  #   runs-on: ubuntu-latest
+  #   outputs:
+  #     tag: ${{ steps.create-gh-release.outputs.computed-prefix }}${{ steps.create-gh-release.outputs.version }}
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - id: create-gh-release
+  #       uses: taiki-e/create-gh-release-action@v1
+  #       with:
+  #         draft: true
+  #         # (required) GitHub token for creating GitHub Releases.
+  #         token: ${{ secrets.GITHUB_TOKEN }}
 
 
   # Build and packages all the things
   upload-artifacts:
-    needs: create-release
+    #needs: create-release
     strategy:
       matrix:
         # For these target platforms
@@ -70,7 +72,7 @@ jobs:
           install-dist: curl --proto '=https' --tlsv1.2 -L -sSf https://github.com/axodotdev/cargo-dist/releases/download/v0.0.2/installer.sh | sh
         - target: aarch64-apple-darwin
           os: macos-11
-          install-dist: curl --proto '=https' --tlsv1.2 -L -sSf https://github.com/axodotdev/cargo-dist/releases/download/v0.0.2/installer.sh | arch -x86_64 sh
+          install-dist: curl --proto '=https' --tlsv1.2 -L -sSf https://github.com/axodotdev/cargo-dist/releases/download/v0.0.2/installer.sh | sh
         - target: x86_64-pc-windows-msvc
           os: windows-2019
           install-dist: irm 'https://github.com/axodotdev/cargo-dist/releases/download/v0.0.2/installer.ps1' | iex
@@ -80,7 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install Rust
-        run: rustup update stable && rustup default stable
+        run: rustup update stable && rustup default stable && rustup target add ${{ matrix.target }}
       - name: Install cargo-dist
         run: ${{ matrix.install-dist }}
       - name: Install packages (Linux)
@@ -100,59 +102,59 @@ jobs:
           cat dist-manifest.json | jq --raw-output ".releases[].artifacts[].path" > uploads.txt
           echo "uploading..."
           cat uploads.txt
-          gh release upload ${{ needs.create-release.outputs.tag }} $(cat uploads.txt)
+          #gh release upload ${{ needs.create-release.outputs.tag }} $(cat uploads.txt)
           echo "uploaded!"
 
   # Compute and upload the manifest for everything
-  upload-manifest:
-    needs: create-release
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install Rust
-        run: rustup update stable && rustup default stable
-      - name: Install cargo-dist
-        run: curl --proto '=https' --tlsv1.2 -L -sSf https://github.com/axodotdev/cargo-dist/releases/download/v0.0.2/installer.sh | sh
-      - name: Run cargo-dist manifest
-        run: |
-          # Generate a manifest describing everything
-          cargo dist manifest --no-local-paths --output-format=json $ALL_CARGO_DIST_TARGET_ARGS $ALL_CARGO_DIST_INSTALLER_ARGS > dist-manifest.json
-          echo "dist manifest ran successfully"
-          cat dist-manifest.json
-          # Upload the manifest to the Github Release™️
-          gh release upload ${{ needs.create-release.outputs.tag }} dist-manifest.json
-          echo "uploaded manifest!"
-          # Edit the Github Release™️ title/body to match what cargo-dist thinks it should be
-          CHANGELOG_TITLE=$(cat dist-manifest.json | jq --raw-output ".releases[].changelog_title")
-          cat dist-manifest.json | jq --raw-output ".releases[].changelog_body" > new_dist_changelog.md
-          gh release edit ${{ needs.create-release.outputs.tag }} --title="$CHANGELOG_TITLE" --notes-file=new_dist_changelog.md
-          echo "updated release notes!"
-      - name: Run cargo-dist --installer=...
-        run: |
-          # Run cargo dist with --no-builds to get agnostic artifacts like installers
-          cargo dist --output-format=json --no-builds $ALL_CARGO_DIST_INSTALLER_ARGS > dist-manifest.json
-          echo "dist ran successfully"
-          cat dist-manifest.json
-          # Grab the installers that were generated and upload them.
-          # This filter is working around the fact that --no-builds is kinds hacky
-          # and still makes/reports malformed zips that we don't want to upload.
-          cat dist-manifest.json | jq --raw-output '.releases[].artifacts[] | select(.kind == "installer") | .path' > uploads.txt
-          echo "uploading..."
-          cat uploads.txt
-          gh release upload ${{ needs.create-release.outputs.tag }} $(cat uploads.txt)
-          echo "uploaded installers!"
+  # upload-manifest:
+  #   needs: create-release
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Install Rust
+  #       run: rustup update stable && rustup default stable
+  #     - name: Install cargo-dist
+  #       run: curl --proto '=https' --tlsv1.2 -L -sSf https://github.com/axodotdev/cargo-dist/releases/download/v0.0.2/installer.sh | sh
+  #     - name: Run cargo-dist manifest
+  #       run: |
+  #         # Generate a manifest describing everything
+  #         cargo dist manifest --no-local-paths --output-format=json $ALL_CARGO_DIST_TARGET_ARGS $ALL_CARGO_DIST_INSTALLER_ARGS > dist-manifest.json
+  #         echo "dist manifest ran successfully"
+  #         cat dist-manifest.json
+  #         # Upload the manifest to the Github Release™️
+  #         #gh release upload ${{ needs.create-release.outputs.tag }} dist-manifest.json
+  #         echo "uploaded manifest!"
+  #         # Edit the Github Release™️ title/body to match what cargo-dist thinks it should be
+  #         CHANGELOG_TITLE=$(cat dist-manifest.json | jq --raw-output ".releases[].changelog_title")
+  #         cat dist-manifest.json | jq --raw-output ".releases[].changelog_body" > new_dist_changelog.md
+  #         #gh release edit ${{ needs.create-release.outputs.tag }} --title="$CHANGELOG_TITLE" --notes-file=new_dist_changelog.md
+  #         echo "updated release notes!"
+  #     - name: Run cargo-dist --installer=...
+  #       run: |
+  #         # Run cargo dist with --no-builds to get agnostic artifacts like installers
+  #         cargo dist --output-format=json --no-builds $ALL_CARGO_DIST_INSTALLER_ARGS > dist-manifest.json
+  #         echo "dist ran successfully"
+  #         cat dist-manifest.json
+  #         # Grab the installers that were generated and upload them.
+  #         # This filter is working around the fact that --no-builds is kinds hacky
+  #         # and still makes/reports malformed zips that we don't want to upload.
+  #         cat dist-manifest.json | jq --raw-output '.releases[].artifacts[] | select(.kind == "installer") | .path' > uploads.txt
+  #         echo "uploading..."
+  #         cat uploads.txt
+  #         #gh release upload ${{ needs.create-release.outputs.tag }} $(cat uploads.txt)
+  #         echo "uploaded installers!"
 
-  # Mark the Github Release™️ as a non-draft now that everything has succeeded!
-  publish-release:
-    needs: [create-release, upload-artifacts, upload-manifest]
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v3
-      - name: mark release as non-draft
-        run: |
-          gh release edit ${{ needs.create-release.outputs.tag }} --draft=false
+  # # Mark the Github Release™️ as a non-draft now that everything has succeeded!
+  # publish-release:
+  #   needs: [create-release, upload-artifacts, upload-manifest]
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: mark release as non-draft
+  #       run: |
+  #         echo gh release edit ${{ needs.create-release.outputs.tag }} --draft=false
 
