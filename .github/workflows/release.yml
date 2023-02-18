@@ -68,6 +68,9 @@ jobs:
         - target: x86_64-apple-darwin
           os: macos-11
           install-dist: curl --proto '=https' --tlsv1.2 -L -sSf https://github.com/axodotdev/cargo-dist/releases/download/v0.0.2/installer.sh | sh
+        - target: aarch64-apple-darwin
+          os: macos-11
+          install-dist: curl --proto '=https' --tlsv1.2 -L -sSf https://github.com/axodotdev/cargo-dist/releases/download/v0.0.2/installer.sh | arch -x86_64 sh
         - target: x86_64-pc-windows-msvc
           os: windows-2019
           install-dist: irm 'https://github.com/axodotdev/cargo-dist/releases/download/v0.0.2/installer.ps1' | iex
